@@ -83,47 +83,43 @@ export class ProfileManager {
         return defaultProfilePath;
     }
     static async prepareProfile(originalPath, browser) {
-        // If the profile has a lock file, the user's browser is already running with it.
-        // To prevent "Profile already in use" errors, clone cookies, storage, and prefs to a temp working copy.
-        const lockFiles = ['parent.lock', 'lock', '.parentlock'];
-        const isLocked = lockFiles.some((f) => fsSync.existsSync(path.join(originalPath, f)));
-        if (isLocked) {
-            const clonedPath = await fs.mkdtemp(path.join(os.tmpdir(), `btool-${browser}-cloned-`));
-            // Copy key database and cookie files
-            const filesToCopy = [
-                'cookies.sqlite',
-                'cookies.sqlite-wal',
-                'places.sqlite',
-                'favicons.sqlite',
-                'key4.db',
-                'logins.json',
-                'cert9.db',
-                'prefs.js'
-            ];
-            for (const file of filesToCopy) {
-                const src = path.join(originalPath, file);
-                const dest = path.join(clonedPath, file);
-                if (fsSync.existsSync(src)) {
-                    try {
-                        await fs.copyFile(src, dest);
-                    }
-                    catch {
-                        // ignore non-critical copy error
-                    }
-                }
-            }
-            // Copy storage directory if present
-            const storageSrc = path.join(originalPath, 'storage');
-            if (fsSync.existsSync(storageSrc)) {
+        // ALWAYS clone cookies, storage, logins, and preferences into a dedicated temporary sandbox.
+        // This guarantees btool NEVER locks the user's live profile directory, allowing
+        // you to open and use your desktop Firefox or Zen anytime without collision or lock contention.
+        const clonedPath = await fs.mkdtemp(path.join(os.tmpdir(), `btool-${browser}-cloned-`));
+        // Copy key database and cookie files
+        const filesToCopy = [
+            'cookies.sqlite',
+            'cookies.sqlite-wal',
+            'places.sqlite',
+            'favicons.sqlite',
+            'key4.db',
+            'logins.json',
+            'cert9.db',
+            'prefs.js'
+        ];
+        for (const file of filesToCopy) {
+            const src = path.join(originalPath, file);
+            const dest = path.join(clonedPath, file);
+            if (fsSync.existsSync(src)) {
                 try {
-                    await fs.cp(storageSrc, path.join(clonedPath, 'storage'), { recursive: true });
+                    await fs.copyFile(src, dest);
                 }
                 catch {
-                    // ignore
+                    // ignore non-critical copy error
                 }
             }
-            return { path: clonedPath, isEphemeral: true, isClonedFromExisting: true };
         }
-        return { path: originalPath, isEphemeral: false, isClonedFromExisting: false };
+        // Copy storage directory if present
+        const storageSrc = path.join(originalPath, 'storage');
+        if (fsSync.existsSync(storageSrc)) {
+            try {
+                await fs.cp(storageSrc, path.join(clonedPath, 'storage'), { recursive: true });
+            }
+            catch {
+                // ignore
+            }
+        }
+        return { path: clonedPath, isEphemeral: true, isClonedFromExisting: true };
     }
 }
