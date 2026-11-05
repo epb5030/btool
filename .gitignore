@@ -1,0 +1,6 @@
+node_modules/
+*.sock
+*.png
+*.log
+*cookies*.json
+.DS_Store
